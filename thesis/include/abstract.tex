@@ -1,0 +1,34 @@
+% !Mode:: "TeX:UTF-8"
+
+\cabstract{
+在大数据时代，随着互联网用户体量的高速增长，数据中心的数量越来越庞大，且在不同的服务器上要跑各种不同的服务。
+为了更好地管理与更高效地利用资源，数据中心需要对其进行统一管理，而虚拟化技术是实现数据中心统一管理的重要手段，
+它可以解决传统数据中心中服务器资源浪费、管理复杂、难以扩展等问题。
+
+RISC-V 作为一个新兴的指令集，一经诞生就在学术界和工业界受到广泛关注，目前 RISC-V 处理器已经达到了一百亿的出货量。
+然而，如今 RISC-V 的虚拟化技术仍然在发展阶段，RISC-V Hypervisor 扩展刚刚被批准进入标准，目前市场仍没有
+RISC-V 虚拟化的流片，对于 RISC-V 虚拟化的软件支持也非常少。因此对于 RISC-V 的研究与学习对于 RISC-V 指令集的发展是十分有意义的。
+
+本课题使用 Rust 编程语言从零开始构建了两版虚拟机监控器，分别命名为 \textbf{hypocaust} 和 \textbf{hypocaust-2}，hypocaust 使用纯软件技术实现了一个简单的虚拟机监控器，并且可以运行自己写的操作系统。
+hypocaust-2 使用了 RISC-V 硬件虚拟化技术更进一步实现了虚拟机监控器，可以运行更加复杂的系统，如 RT-Thread 和 Linux。之后，本课题尝试将自己构建的虚拟机监控器与开源的虚拟机监控器进行性能对比。  
+  
+最后，本课题给出了构建虚拟机监控器的实验结果与一些经验，并尝试分析课题成果的优势与不足，最后给出了总结与展望。
+
+}
+
+\ckeywords{RISC-V 指令集架构，虚拟化技术，Rust 编程语言}
+
+\eabstract{
+    In the era of big data, with the rapid growth of internet users, the number of data centers is becoming increasingly large, and various services need to run on different servers. In order to better manage and utilize resources, data centers need unified management, and virtualization technology is an important means to achieve this. It can solve the problems of server resource waste, complex management, and difficult scalability in traditional data centers.
+
+    As a new instruction set architecture, RISC-V has been widely recognized in academia and industry since its inception, and RISC-V processors have now reached a shipment volume of 10 billion. However, RISC-V virtualization technology is still under development, with the RISC-V Hypervisor extension only recently approved for standardization, and there is currently no RISC-V virtualization chip on the market, and there is very little software support for RISC-V virtualization. Therefore, research and learning of RISC-V are very meaningful for the development of the RISC-V instruction set.
+    
+    This project uses the Rust programming language to build two versions of virtual machine monitors from scratch, named "hypocaust" and "hypocaust-2". Hypocaust uses pure software technology to implement a simple virtual machine monitor that can run its own operating system. Hypocaust-2 further implements a virtual machine monitor with RISC-V hardware virtualization technology and can run more complex systems such as RT-Thread and Linux. Afterwards, this project attempts to compare the performance of the self-built virtual machine monitor with open-source virtual machine monitors.
+    
+    Finally, this project presents the experimental results and experiences of building virtual machine monitors, analyzes the advantages and disadvantages of the project results, and provides a conclusion and outlook.
+}
+
+\ekeywords{RISC-V Instruction Set Architecture, Virtualization Technology, Rust Programming Language}
+%%%每个关键词首字母要大写
+
+\makeabstract

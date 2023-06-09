@@ -1,0 +1,32 @@
+% !Mode:: "TeX:UTF-8"
+% !TEX program = xelatex
+
+\def\usewhat{xelatex}                               
+\documentclass[12pt,openany,oneside]{ctexbook}
+                                                     % 本科生毕业论文通常采用单页排版
+\input{setup/package}							% 定义本文所使用宏包
+\graphicspath{figures/}							% 定义所有的图像文件在 figures 子目录下
+
+\hypersetup{
+	colorlinks=true,
+	linkcolor=black
+}						%去掉目录红框
+\begin{document}
+\input{setup/format}									% 开始全文
+
+
+
+%%%%%%%%%%    附录    %%%%%%%%%%
+% \titleformat{\chapter}{\centering\xiaosan\hei}{\chaptername}{2em}{} % 标题四号黑体居中
+% \titlecontents{chapter}[2em]{\vspace{.5\baselineskip}\xiaosan\song}
+% {\prechaptername\CJKnumber{\thecontentslabel}\postchaptername\qquad}{} 
+% {}                            % 设置该选项为空是为了不让目录中显示页码
+\addcontentsline{toc}{chapter}{外文资料}
+\include{appendix/paperInEnglish}
+\addcontentsline{toc}{chapter}{中文译文}
+\include{appendix/paperInChinese}		
+% \include{include/appendix}
+% \include{include/acknowledgements}
+% \include{appendix/acknowledgements}				% 致谢
+\clearpage
+\end{document}									% 结束全文

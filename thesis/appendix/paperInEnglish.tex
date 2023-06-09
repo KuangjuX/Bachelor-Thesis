@@ -1,0 +1,376 @@
+% !Mode:: "TeX:UTF-8"
+
+\titlecontents{chapter}[2em]{\vspace{.5\baselineskip}\xiaosan\song}%
+             {\prechaptername\CJKnumber{\thecontentslabel}\postchaptername\qquad}{} %
+             {}             % 设置该选项为空是为了不让目录中显示页码          
+\addcontentsline{toc}{chapter}{外文资料}
+%\setcounter{page}{1}       % 如果需要从该页开始从 1 开始编页，则取消该注释
+\markboth{外文资料}{外文资料}
+\chapter*{外文资料}
+Virtualization is a technological enabler used on a large
+spectrum of applications, ranging from cloud computing and
+servers to mobiles and embedded systems [1]. As a fundamental cornerstone of cloud computing, virtualization provides
+numerous advantages for workload management, data protection, and cost-/power-effectiveness [2]. On the other side of the
+spectrum, the embedded and safety-critical systems industry
+has resorted to virtualization as a fundamental approach to
+address the market pressure to minimize size, weight, power,
+and cost (SWaP-C), while guaranteeing temporal and spatial
+isolation for certification (e.g., ISO26262) [3]–[5]. Due to the
+proliferation of virtualization across multiple industries and
+use cases, prominent players in the silicon industry started
+to introduce hardware virtualization support in mainstream
+computing architectures (e.g., Intel Virtualization Technology,
+Arm Virtualization Extensions, respectively) [6], [7].
+
+
+Recent advances in computing architectures have brought to
+light a novel instruction set architecture (ISA) named RISCV [8]. RISC-V has recently reached the mark of 10+ billion
+shipped cores [9]. It distinguishes itself from the classical
+mainstream, by providing a free and open standard ISA,
+featuring a modular and highly customizable extension scheme
+that allows it to scale from small microcontrollers up to
+supercomputers [10]–[16]. The RISC-V privileged architecture
+provides hardware support for virtualization by defining the
+Hypervisor extension [17], ratified in Q4 2021.
+
+
+Despite the Hypervisor extension ratification, as of this
+writing, there is no RISC-V silicon with this extension on
+the market1
+. There are open-source hypervisors with upstream
+support for the Hypervisor extension, i.e., Bao [1], Xvisor [18],
+KVM [19], and seL4 [20] (and work in progress in Xen [21]
+and Jailhouse [22]). However, to the best of our knowledge,
+there are just a few hardware implementations deployed on
+FPGA, which include the Rocket chip [23] and NOEL-V [24]
+(and soon SHAKTI and Chromite [25]). Notwithstanding, no
+existing work has (i) focused on understanding and enhancing
+the microarchitecture for virtualization and (ii) performed a
+design space exploration (DSE) and accompanying power,
+performance, area (PPA) analysis.
+
+
+In this work, we describe the architectural and microarchitectural support for virtualization in a open source RISC-V
+CVA6-based [14] (64-bit) SoC. At the architectural level, the
+implementation is compliant with the Hypervisor extension
+(v1.0) [17] and includes the implementation of the RISC-V
+timer (Sstc) extension [26] as well. At the microarchitectural
+level, we modified the vanilla CVA6 microarchitecture to
+support the Hypervisor extension, and proposed a set of
+additional extensions / enhancements to reduce the hardware
+virtualization overhead: (i) a L1 TLB, (ii) a dedicated second
+stage TLB coupled to the PTW (i.e., GTLB in our lingo), and
+(iii) an L2 TLB. We also present and discuss a comprehensive
+design space exploration on the microarchitecture. We first
+evaluate 23 (out of 288) hardware designs deployed on FPGA
+(Genesys 2) and assess the impact on functional performance
+(execution cycles) and hardware. Then, we elect 10 designs
+and analyze them in depth with post-layout simulations of
+implementations in 22nm FDX technology.
+
+To summarize, with this work, we make the following
+contributions. Firstly, we provide hardware virtualization support in the CVA6 core. In particular, we design a set of
+(virtualization-oriented) microarchitectural enhancements to
+the nested memory management unit (MMU) (Section III). To
+the best of our knowledge, there is no work or study describing
+and discussing microarchitectural extensions to improve the
+hardware virtualization support in a RISC-V core. Second,
+we perform a design space exploration (DSE), encompassing
+dozens of design configurations. This DSE includes tradeoffs on parameters from three different microarchitectural
+components (L1 TLB, GTLB, L2 TLB) and respective impact
+on functional performance and hardware costs (Section IV).
+Finally, we conduct post-layout simulations on a few elected
+design configurations to assess a Power, Performance, and
+Area (PPA) analysis (Sections V).
+
+For the DSE evaluation, we ran the MiBench (automotive subset) benchmarks to assess functional performance.
+The virtualization-aware non-optimized CVA6 implementation
+served as our baseline configuration. The software setup encompassed a single Linux VM running atop Bao hypervisor for
+a single-core design. We measured the performance speedup
+of the hosted Linux VM relative to the baseline configuration.
+Results from the DSE exploration demonstrated that the proposed microarchitectural extensions can achieve a functional
+performance speedup up to 19% (e.g., for the susanc small
+benchmark); however, in some cases at the cost of a nonnegligible increase in area and power with respect to the
+baseline. Thus, results from the PPA analysis show that: (i)
+the Sstc extension has negligible impact on power and area;
+(iii) the GTLB increases the overall area in less than 1%;
+and (iv) the L2 TLB introduces a non-negligible 8% increase
+in area in some configurations. As a representative, wellbalanced configuration, we selected the CVA6 design with Sstc
+support and a GTLB with 8 entries. For this specific hardware
+configuration, we observed a performance speedup of up to
+16% (approx. 12.5% on average) at the cost of 0.78% in area
+and 0.33% in power. To the best of our knowledge, this paper
+reports the first public work on a complete DSE evaluation
+and PPA analysis for a virtualization-enhanced RISC-V core.
+
+\section*{Background}
+
+\subsection*{RISC-V Privileged Specification}
+
+The RISC-V privileged instruction set architecture (ISA)
+[17] divides its execution model into 3 privilege levels: (i)
+machine mode (M-mode) is the most privileged level, hosting
+the firmware which implements the supervisor binary interface (SBI) (e.g., OpenSBI); (ii) supervisor mode (S-Mode)
+runs Unix type operating systems (OSes) that require virtual
+memory management; and (iii) user mode (U-Mode) executes
+userland applications. The modularity offered by the RISC-V
+ISA seamlessly allows for implementations at distinct design
+points, ranging from small embedded platforms with just Mmode support, to fully blown server class systems with M/S/U.
+
+\subsection*{CVA6}
+
+CVA6 (formerly known as Ariane) is an application class
+RISC-V core that implements both the RV64 and RV32
+versions of RISC-V ISA [14]. The core fully supports the 3 privilege execution modes M/S/U-modes and provides hardware support for memory virtualization by implementing a
+memory management unit (MMU), making it suitable for
+running a fully-fledged OS such as Linux. Recent additions
+also include a energy-efficient Vector Unit co-processor [27].
+Internally, the CVA6 microarchitecture encompasses a 6-stage
+pipeline, single issue, with an out-of-order execution stage and
+8 PMP entries. The MMU has separate TLBs for data and
+instructions and the Page Table Walker (PTW) implements the
+Sv39 and Sv32 translation modes as defined by the privileged
+specification [17].
+
+\subsection*{RISC-V Virtualization}
+
+Unlike other mainstream ISAs, the RISC-V privileged architecture was designed from the initial conception to be
+classically virtualizable [28]. So although, the ISA, per se,
+allows the straightforward implementation of hypervisors resorting for example to classic virtualization techniques []
+(e.g., trap-and-emulation and shadow page tables), it is well
+understood that such techniques incur in a prohibitive performance penalty and cannot cope with current embedded
+real-time virtualization requirements (e.g, interrupt latency)
+[23]. Thus, to increase virtualization efficiency, the RISCV privileged architecture specification introduced hardware
+support for virtualization through the (optional) Hypervisor
+extension [17].
+
+\textbf{Privilege Levels.} As depicted in Figure 1, the RISC-V Hypervisor extension execution model follows an orthogonal
+design where the supervisor mode (S-mode) is modified to an
+hypervisor-extended supervisor mode (HS-mode) well-suited
+to host both type-1 or type-2 hypervisors2
+. Additionally, two
+new privileged modes are added and can be leveraged to run
+the guest OS at virtual supervisor mode (VS-mode) and virtual
+user mode (VU-mode).
+
+
+\textbf{Two-stage Address Translation} The Hypervisor extension
+also defines a second stage of translation (G-stage in RISC-V
+lingo) to virtualize the guest memory by translating guestphysical addresses (GPA) into host-physical addresses (HPA).
+The HS-mode operates like S-mode but with additional hypervisor registers and instructions to control the VM execution and G-stage translation. For instance, the hgatp register
+holds the G-stage root table pointer and respective translation
+specific configuration fields.
+
+\textbf{Hypervisor Control and Status Registers (CSRs).} Each VM
+running in VS-mode has its own control and status registers
+(CSRs) that are shadow copies of the S-mode CSRs. These
+registers can be used to determine the guest execution state
+and perform VM switches. To control the virtualization state,
+a specific flag called virtualization mode (V bit) is used. When
+V=1, the guest is executing in VS-mode or VU-mode, normal
+S-mode CSRs accesses are actually accessing the VS-mode
+CSRs, and the G-stage translation is active. Otherwise, if
+V=0, normal S-mode CSRs are active, and the G-stage is
+disabled. To ease guest-related exception trap handling, there
+are guest specific traps, e.g., guest page faults, VS-level illegal
+exceptions, and VS-level ecalls (a.k.a. hypercalls).
+
+\subsection*{Nested-MMU}
+
+The MMU is a hardware component responsible for translating virtual memory references to physical ones, while enforcing memory access permissions. The OS holds control over the
+MMU by assigning a virtual address space to each process and
+managing the MMU translation structures in order to correctly
+translate virtual addresses (VAs) into physical addresses (PAs).
+On a virtualized system, the MMU can translate from guestvirtual addresses (GVAs) to guest-physical addresses (GPAs)
+and from GPA into host-physical addresses (HPAs). In this
+case, this feature is referred to as nested-MMU. The RISCV ISA supports the nested-MMU through a new stage of
+translation that converts GPA into HPA, denoted G-stage. The
+guest VM takes control over the first stage of translation
+(VS-stage in RISC-V lingo), while the hypervisor assumes
+control over the second one (G-stage). Originally, the RISCV privileged specification defines that a VA is converted into
+a PA by transversing a multi-level radix-tree table using one
+of four different topologies: (i) Sv32 for 32 virtual address
+spaces (VAS) with a 2-level hierarchy tree; (ii) Sv39 for 39-
+bit VAS with a 3-level tree; (iii) Sv48 for 48-bit VAS and
+4-level tree; and (iv) Sv57 for 57-bit VAS and 5-level tree.
+Each level holds a pointer to the next table (non-leaf entry) or
+the final translation (leaf entry). This pointer and respective
+permissions are stored in a 64-bit (RV64) or 32-bit (RV32)
+width page table entry (PTE). Note that RISC-V splits the
+virtual address into 4KiB page sizes, but since each level can
+either be a leaf on non-leaf, it supports superpages to reduce
+the TLB pressure, e.g., Sv39 supports 4KiB, 2MiB, and 1GiB
+page sizes.
+
+\subsection*{RISC-V "stimecmp/vstimecmp" Extension(Sstc)}
+
+The RISC-V Sstc extension [26] aims at enhancing supervisor mode with its own timer interrupt facility, thus eliminating
+the large overheads for emulating S/HS-mode timers and
+timer interrupt generation up in M-mode. The Sstc extension
+also adds a similar facility to the Hypervisor extension for
+VS-mode. To enable direct control over timer interrupts in the HS/S-mode and VS-mode, the Sstc encompasses two
+additionally CSRs: (i) stimecmp and (ii) vstimecmp. Whenever
+the value of time counter register is greater then the value
+of stimecmp, the supervisor timer interrupt pending (STIP)
+bit goes high and a timer interrupt is deliver to HS/S-mode.
+The same happens for VS-mode, with one subtle difference:
+the offset of the guest delta register (htimedelta) is added to
+the time value. If vstimecmp is greater than time+htimedelta,
+VSTIP goes high and the VS-mode timer interrupt is generated.
+For a complete overview of the RISC-V timer architecture and
+a discussion on why the classic RISC-V timer specification incurs a significant performance penalty, we refer the interested
+reader to [23].
+
+\section*{CVA6 Hypervisor Support: Architecture And Microarchitecture}
+
+In this section, we describe the architectural and microarchitectural hardware virtualization support in the CVA6 (compliant with the RISC-V Hypervisor extension v1.0), illustrated
+in Figure 2.
+
+\subsection*{A. Hypervisor and Virtual Supervisor Execution Modes}
+
+As previously described (refer to Section II-C), the Hypervisor extension specification extends the S-mode into the HSmode and adds two extra orthogonal execution modes, denoted
+VS-mode and VU-mode. To add support for this new execution
+modes, we have extended/modified some of the CVA6 core
+functional blocks, in particular, the CSR and Decode modules.
+As illustrated by Figure 2, the hardware virtualization architecture logic encompasses five building blocks: (i) VS-mode
+and HS-mode CSRs access logic and permission checks; (ii)
+exceptions and interrupts triggering and delegation; (iii) trap
+entry and exit; (iv) hypervisor instructions decoding and execution; and (v) nested-MMU translation logic. The CSR module was extended to implement the first three building blocks
+that comprise the hardware virtualization logic, specifically:
+(i) HS-mode and VS-mode CSRs access logic (read/write
+operations); (ii) HS and VS execution mode trap entry and
+return logic; and (iii) a fraction of the exception/interrupt
+triggering and delegation logic from M-mode to HS-mode
+and/or to VS/VU-mode (e.g., reading/writing to vsatp CSR
+triggers an exception in VS-mode when VTM bit is set on
+hstatus CSR). The Decode module was modified to implement
+hypervisor instructions decoding (e.g., hypervisor load/store
+instructions and memory-management fence instructions) and
+all VS-mode related instructions execution access exception
+triggering.
+
+We refer readers to Table I, which presents a summary
+of the features that were fully and partially implemented.
+We have implemented all mandatory features of the ratified
+1.0 version of the specification; however, we still left some
+optional features as partially implemented, due to the dependency on upcoming or newer extensions. For example:
+hvencfg bits depend on Zicbom [29] (cache block management
+operations); hgeie and hgeip depend on the Advanced Interrupt
+Architecture (AIA) [30]; and hgatp depends on virtual address
+spaces not currently supported in the vanilla CVA6.
+
+\subsection*{B. Hypervisor Load/Store Instructions}
+
+The hypervisor load/store instructions (i.e., HLV, HSV, and
+HLVX) provide a mechanism for the hypervisor to access
+the guest memory while subject to the same translation and
+permission checks as in VS-mode or VU-mode. These instructions change the translation settings at the instruction
+granularity level, forcing a full swap of privilege level and
+translation applied at every hypervisor load/store instruction
+execution. The implementation encompasses the addition of
+a signal (identified as hyp ld/st in Figure 2) to the CVA6
+pipeline that travels from the decoding to the load/store unit
+in the execute stage. This signal is then fed into the MMU
+that performs (i) all necessary context switches (i.e., enables
+the hgatp and vstap CSRs), (ii) enables the virtualization
+mode, and (iii) changes execution mode as specified in the
+hstatus.SPVP field.
+
+\subsection*{C. Nested Page-Table Walker(PTW)}
+
+One of the major functional blocks of an MMU is the pagetable walker (PTW). Fundamentally, the PTW is responsible
+for partitioning a virtual address accordingly to the specific
+topology and scheme (e.g., Sv39) and then translating it into a
+physical address using the memory page tables structures. The
+Hypervisor extension specifies a new stage of translation (Gstage) that is used to translate guest-physical addresses into
+host-physical addresses. Our implementation supports Bare
+translation mode (no G-stage) and Sv39x4, which defines a
+41-bit width maximum guest physical address space (virtual
+space already supported by the CVA6).
+
+We extended the existing finite state machine (FSM) used to
+translate VA to PA and added only a new control state to keep
+track of the current stage of translation and assist the context
+switching between VS-Stage and G-Stage translations. With
+the G-stage in situ, it is mandatory to translate (i) the leaf GPA
+resulting from the VS-Stage translation but also (ii) all nonleaf PTE GPA used during the VS-Stage translation walk. To
+accomplish that, we identify three stages of translation that can
+occur during a PTW iteration: (i) VS-Stage - the PTW current
+state is translating a guest virtual address into a GPA; (ii) GStage Intermed - the PTW current state is translating non-leaf
+PTE GPA into HPA; and (iii) G-Stage Final - the PTW current
+state is translating the final output address from VS-Stage into
+an HPA. It is worth noting if hgatp is in Bare mode, no Gstage translation is in place, and we perform a standard VSStage translation. Once the nested walk completes, the PTW
+updates the TLB with the final PTE from VS-stage and Gstage, alongside the current address space identifier (ASID)
+and the VMID. One implemented optimization consists in
+storing the translation page size (i.e., 4KiB, 2MiB, and 1GiB)
+for both VS- and G-stages into the same TLB entry as well
+as permissions access bits for each stage. This helps to reduce
+the TLB hit time and improve hardware reuse.
+
+\subsection*{D. Virtualization-aware TLbs(vTLB)}
+
+The CVA6 MMU microarchitecture has two small fully
+associative TLB: one for data (L1 DTLB) and the other for
+instructions (L1 ITLB). Both TLBs support a maximum of 16
+entries and fully implement the flush instructions, i.e., sfence,
+including filtering by ASID and virtual address. To support
+nested translation, we modified the microarchitecture of the L1
+DTLB and ITLB to support two stages of translation, including
+access permissions and VMIDs. Each TLB entry holds both
+VS-Stage and G-Stage PTE and respective permissions. The
+lookup logic is performed using the merged final translation
+size from both stages, i.e. if the VS-stage is a 4KiB and
+the G-stage is a 2MiB translation, the final translation would
+be a 4KiB. This is probably one of the major drawbacks of
+having both the VS-stage and G-stage stored together. For
+instance, hypervisors supporting superpages/hugepages use the
+2MiB page size to optimize the MMU performance. Although
+this significantly reduces the PTW walk time, if the guest
+uses 4KiB page size, the TLB lookup would not benefit
+from superpages, since the translation would be stored as a
+4KiB page size translation. The alternative approach would
+be to have separate TLBs for the VS-stage and G-stage final
+translations, but it would translate into higher hardware costs,
+less hardware reuse (if G-stage is not active), and a higher
+performance penalty on an L1 TLB hit (TLB search time
+increased by approximately a factor of 2). Since L1 TLBs are
+fully combinational circuits that lie on the critical path of the
+CPU, we decide to keep the VS-stage and G-stage translations
+in a single TLB entry. Finally, the TLB also supports VMID
+tags allowing hypervisors to perform a more efficient TLB
+management using per-VMID flushes, and avoiding full TLB
+flush on a VM context switch. As a final note, the TLB also
+allows flushes by guest physical address, i.e., hypervisor fence
+instructions (HFENCE.VVMA/GVMA) are fully supported.
+
+\subsection*{E. Microarchitectural extension \#1 - GTLB}
+
+A full nested table walk for the Sv39 scheme can take up
+to 15 memory accesses, five times more than a standard Sstage translation. This additional burden imposes a higher TLB
+miss penalty, resulting in a (measured) overhead of up to 13%
+on the functional performance (execution cycles) (comparing
+the baseline virtualization implementation with the vanilla
+CVA6). To mitigate this, we have extended the CVA6 microarchitecture with a G-Stage TLB (GTLB) in the nested-PTW
+module to store intermediate GPA to HPA translations, i.e.,
+VS-Stage non-leaf PTE guest physical address to host physical
+addresses translation. Figure 3 illustrates the modifications
+required to integrate the GTLB in the MMU microarchitecture.
+The GTLB structure aims at accelerating VS-stage translation
+by skipping each nested translation during the VS-stage page
+table walk. Figure 4 presents a 4KiB page size translation
+process featuring a GTLB in the PTW. Without the GTLB,
+each time the guest forms the non-leaf physical address PTE
+pointer during the walk, it needs: (i) to translate it via Gstage, (ii) read the next level PTE value from memory, and
+(iii) resume the VS-stage translation. When using superpages
+(2MiB or 1GiB), there are fewer translation walks, reducing
+the performance penalty. With a simple hardware structure, it
+is possible to mitigate such overheads by keeping those Gstage translations cached, while avoiding unnecessary cache
+pollution and nondeterministic memory accesses. Another
+reason to support such an approach is related to the fact that
+PTEs are packed together in sequence in memory, i.e., multiple
+VS-Stage non-leaf PTE address translations will share the
+same GTLB entry [31].
+
+
+
+
