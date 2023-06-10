@@ -1,6 +1,6 @@
 # Undergraduate-Thesis
 
-- [thesis](thesis/main.pdf)
+- [thesis](thesis/thesis.pdf)
 
 - [slide](slide/slide.pdf)
 
